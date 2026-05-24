@@ -2,43 +2,31 @@ import streamlit as st
 import sqlite3
 import hashlib
 import json
-import datetime
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from plotly.subplots import make_subplots
 import io
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, cm
+from reportlab.lib.units import cm
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    HRFlowable, KeepTogether
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 )
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER
 
-# ─────────────────────────────────────────────
-#  PAGE CONFIG
-# ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="WorkSafe Pro — Ergonomics Scorer",
-    page_icon="🏥",
+    page_title="ICT in Health and Ergonomics: Workstation Safety Scorer",
+    page_icon="🖥️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ─────────────────────────────────────────────
-#  GLOBAL CSS
-# ─────────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
-}
-
+html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; }
 #MainMenu, footer, header { visibility: hidden; }
 .block-container { padding-top: 1.5rem; }
 
@@ -74,11 +62,7 @@ html, body, [class*="css"] {
     margin: 0 0 0.3rem;
     letter-spacing: -0.5px;
 }
-.hero-sub {
-    color: #7dd3fc;
-    font-size: 0.95rem;
-    font-weight: 300;
-}
+.hero-sub { color: #7dd3fc; font-size: 0.95rem; font-weight: 300; }
 
 .section-card {
     background: #ffffff;
@@ -94,9 +78,6 @@ html, body, [class*="css"] {
     font-weight: 700;
     color: #1e3a5f;
     margin-bottom: 1rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
 }
 
 .score-badge {
@@ -165,33 +146,21 @@ html, body, [class*="css"] {
 }
 
 .stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
-    background: #f1f5f9;
-    padding: 6px;
-    border-radius: 10px;
+    gap: 8px; background: #f1f5f9; padding: 6px; border-radius: 10px;
 }
 .stTabs [data-baseweb="tab"] {
-    border-radius: 7px;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 500;
-    font-size: 0.88rem;
-    color: #475569;
-    padding: 6px 18px;
+    border-radius: 7px; font-family: 'DM Sans', sans-serif;
+    font-weight: 500; font-size: 0.88rem; color: #475569; padding: 6px 18px;
 }
 .stTabs [aria-selected="true"] {
-    background: white !important;
-    color: #1d4ed8 !important;
+    background: white !important; color: #1d4ed8 !important;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
-
-.stSelectbox > div, .stSlider > div { color: #1e293b; }
 label { color: #374151 !important; font-size: 0.88rem !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-#  DATABASE
-# ─────────────────────────────────────────────
+# ── DATABASE ──────────────────────────────────
 def get_db():
     conn = sqlite3.connect("worksafe.db", check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -293,37 +262,35 @@ def get_all_users():
     conn.close()
     return [dict(r) for r in rows]
 
-# ─────────────────────────────────────────────
-#  ASSESSMENT FRAMEWORK
-# ─────────────────────────────────────────────
+# ── ASSESSMENT FRAMEWORK ──────────────────────
 CATEGORIES = {
     "🪑 Seating & Posture": {
         "color": "#3b82f6",
         "questions": [
-            {"id": "seat_height",   "text": "Chair height allows feet flat on floor / footrest",       "weight": 8},
-            {"id": "lumbar",        "text": "Chair provides adequate lumbar (lower back) support",       "weight": 9},
-            {"id": "seat_depth",    "text": "Seat depth supports thighs without pressure behind knees", "weight": 7},
-            {"id": "armrests",      "text": "Armrests allow relaxed shoulders (90° elbow angle)",       "weight": 6},
-            {"id": "back_upright",  "text": "Back remains upright (90–110° recline) during work",      "weight": 8},
+            {"id": "seat_height",  "text": "Chair height allows feet flat on floor / footrest",        "weight": 8},
+            {"id": "lumbar",       "text": "Chair provides adequate lumbar (lower back) support",        "weight": 9},
+            {"id": "seat_depth",   "text": "Seat depth supports thighs without pressure behind knees",  "weight": 7},
+            {"id": "armrests",     "text": "Armrests allow relaxed shoulders (90° elbow angle)",        "weight": 6},
+            {"id": "back_upright", "text": "Back remains upright (90–110° recline) during work",       "weight": 8},
         ]
     },
     "🖥️ Monitor & Display": {
         "color": "#8b5cf6",
         "questions": [
-            {"id": "monitor_dist",  "text": "Monitor at arm's length (50–70 cm) from eyes",            "weight": 8},
-            {"id": "monitor_height","text": "Top of screen at or slightly below eye level",             "weight": 9},
-            {"id": "monitor_glare", "text": "Screen free from glare and reflections",                  "weight": 7},
-            {"id": "refresh_rate",  "text": "Display refresh rate ≥ 60 Hz; resolution clear",          "weight": 5},
-            {"id": "dual_monitor",  "text": "If dual monitors: primary centred, secondary at same height","weight": 4},
+            {"id": "monitor_dist",   "text": "Monitor at arm's length (50–70 cm) from eyes",           "weight": 8},
+            {"id": "monitor_height", "text": "Top of screen at or slightly below eye level",            "weight": 9},
+            {"id": "monitor_glare",  "text": "Screen free from glare and reflections",                 "weight": 7},
+            {"id": "refresh_rate",   "text": "Display refresh rate ≥ 60 Hz; resolution clear",         "weight": 5},
+            {"id": "dual_monitor",   "text": "If dual monitors: primary centred, secondary same height","weight": 4},
         ]
     },
     "⌨️ Keyboard & Mouse": {
         "color": "#10b981",
         "questions": [
-            {"id": "kb_position",   "text": "Keyboard positioned so wrists are straight (neutral)",    "weight": 8},
-            {"id": "mouse_close",   "text": "Mouse adjacent to keyboard, same surface level",          "weight": 7},
-            {"id": "wrist_rest",    "text": "Wrist rest used only during pauses, not while typing",    "weight": 5},
-            {"id": "kb_tilt",       "text": "Keyboard tilt is low / flat to avoid wrist extension",    "weight": 6},
+            {"id": "kb_position", "text": "Keyboard positioned so wrists are straight (neutral)",      "weight": 8},
+            {"id": "mouse_close", "text": "Mouse adjacent to keyboard, same surface level",            "weight": 7},
+            {"id": "wrist_rest",  "text": "Wrist rest used only during pauses, not while typing",      "weight": 5},
+            {"id": "kb_tilt",     "text": "Keyboard tilt is low / flat to avoid wrist extension",      "weight": 6},
         ]
     },
     "💡 Lighting & Environment": {
@@ -359,11 +326,11 @@ CATEGORIES = {
     "🧠 Psychosocial Factors": {
         "color": "#ec4899",
         "questions": [
-            {"id": "workload",      "text": "Workload is manageable within working hours",             "weight": 8},
-            {"id": "job_control",   "text": "Worker has control over task pace and method",           "weight": 7},
-            {"id": "social_support","text": "Good social support from colleagues/supervisors",        "weight": 6},
-            {"id": "stress_level",  "text": "Stress levels are low to moderate (self-reported)",      "weight": 8},
-            {"id": "digital_wellbeing","text":"Digital screen time managed; no tech-induced fatigue", "weight": 7},
+            {"id": "workload",         "text": "Workload is manageable within working hours",          "weight": 8},
+            {"id": "job_control",      "text": "Worker has control over task pace and method",        "weight": 7},
+            {"id": "social_support",   "text": "Good social support from colleagues/supervisors",     "weight": 6},
+            {"id": "stress_level",     "text": "Stress levels are low to moderate (self-reported)",   "weight": 8},
+            {"id": "digital_wellbeing","text": "Digital screen time managed; no tech-induced fatigue","weight": 7},
         ]
     },
 }
@@ -392,8 +359,7 @@ def compute_scores(responses):
         category_scores[cat_name] = round(pct, 1)
         total_weighted += cat_weighted
         total_weight += cat_weight
-    total_pct = (total_weighted / (total_weight * 5)) * 100
-    return round(total_pct, 1), category_scores
+    return round((total_weighted / (total_weight * 5)) * 100, 1), category_scores
 
 def get_risk_level(score):
     if score >= 80: return "Excellent", "badge-excellent", "🟢"
@@ -405,104 +371,92 @@ def generate_recommendations(category_scores, responses):
     recs = []
     THRESHOLDS = {
         "🪑 Seating & Posture": {
-            "seat_height":   ("Adjust chair height so feet rest flat on the floor or use a footrest.", "High"),
-            "lumbar":        ("Add a lumbar support cushion or adjust built-in lumbar support.", "High"),
-            "back_upright":  ("Set monitor/task reminders to correct posture every 30 minutes.", "Medium"),
+            "seat_height":  ("Adjust chair height so feet rest flat on the floor or use a footrest.", "High"),
+            "lumbar":       ("Add a lumbar support cushion or adjust built-in lumbar support.", "High"),
+            "back_upright": ("Set reminders to correct posture every 30 minutes.", "Medium"),
         },
         "🖥️ Monitor & Display": {
-            "monitor_height":("Raise monitor using a stand or books so top aligns with eye level.", "High"),
+            "monitor_height":("Raise monitor using a stand so top aligns with eye level.", "High"),
             "monitor_dist":  ("Move monitor to arm's-length distance (50–70 cm).", "High"),
             "monitor_glare": ("Reposition monitor perpendicular to windows; use anti-glare filter.", "Medium"),
         },
         "⌨️ Keyboard & Mouse": {
-            "kb_position":   ("Place keyboard so forearms are parallel to floor, wrists neutral.", "High"),
-            "mouse_close":   ("Move mouse adjacent to keyboard to reduce shoulder reach.", "Medium"),
+            "kb_position": ("Place keyboard so forearms are parallel to floor, wrists neutral.", "High"),
+            "mouse_close": ("Move mouse adjacent to keyboard to reduce shoulder reach.", "Medium"),
         },
         "💡 Lighting & Environment": {
             "ambient_light": ("Install task lighting (300–500 lux) or adjust blind/curtain positions.", "Medium"),
-            "noise_level":   ("Use acoustic panels, noise-cancelling headphones, or quiet hours policy.", "Medium"),
+            "noise_level":   ("Use acoustic panels or noise-cancelling headphones.", "Medium"),
             "temperature":   ("Adjust HVAC or use personal fan/heater within 20–24 °C range.", "Low"),
         },
         "📐 Desk & Workspace Layout": {
-            "desk_height":   ("Use a height-adjustable desk or monitor/keyboard risers.", "High"),
-            "reach_zone":    ("Reorganise desktop: keep mouse, phone, stationery within 30 cm.", "Medium"),
-            "cable_mgmt":    ("Use cable trays/clips to remove trip hazards under/around desk.", "Low"),
+            "desk_height": ("Use a height-adjustable desk or monitor/keyboard risers.", "High"),
+            "reach_zone":  ("Reorganise desktop: keep mouse, phone, stationery within 30 cm.", "Medium"),
+            "cable_mgmt":  ("Use cable trays/clips to remove trip hazards under/around desk.", "Low"),
         },
         "🧘 Work Habits & Breaks": {
-            "micro_breaks":  ("Set a timer every 30–45 min to stand, stretch, or walk briefly.", "High"),
-            "eye_breaks":    ("Follow the 20-20-20 rule; use a reminder app if needed.", "High"),
-            "exercise":      ("Incorporate 10-min desk stretches and a 30-min walk into daily routine.", "Medium"),
+            "micro_breaks": ("Set a timer every 30–45 min to stand, stretch, or walk briefly.", "High"),
+            "eye_breaks":   ("Follow the 20-20-20 rule; use a reminder app if needed.", "High"),
+            "exercise":     ("Incorporate 10-min desk stretches and a 30-min walk into daily routine.", "Medium"),
         },
         "🧠 Psychosocial Factors": {
-            "workload":      ("Discuss workload with supervisor; use task prioritisation matrix.", "High"),
-            "stress_level":  ("Use mindfulness breaks, limit after-hours emails, consider counselling.", "High"),
+            "workload":         ("Discuss workload with supervisor; use task prioritisation matrix.", "High"),
+            "stress_level":     ("Use mindfulness breaks, limit after-hours emails, consider counselling.", "High"),
             "digital_wellbeing":("Apply digital detox periods; enable blue-light filter after 6 PM.", "Medium"),
         },
     }
     for cat, q_map in THRESHOLDS.items():
         for qid, (advice, priority) in q_map.items():
             if responses.get(qid, 5) <= 2:
-                recs.append({"category": cat, "advice": advice, "priority": priority, "score": responses.get(qid, 5)})
+                recs.append({"category": cat, "advice": advice, "priority": priority})
     for cat, score in category_scores.items():
         if score < 50 and not any(r["category"] == cat for r in recs):
-            recs.append({
-                "category": cat,
-                "advice": f"Overall {cat.split(' ', 1)[1]} score is low ({score}%). Schedule a workstation ergonomic review.",
-                "priority": "Medium",
-                "score": score
-            })
-    priority_order = {"High": 0, "Medium": 1, "Low": 2}
-    recs.sort(key=lambda x: priority_order.get(x["priority"], 3))
+            recs.append({"category": cat,
+                         "advice": f"Overall {cat.split(' ',1)[1]} score is low ({score}%). Schedule an ergonomic review.",
+                         "priority": "Medium"})
+    recs.sort(key=lambda x: {"High":0,"Medium":1,"Low":2}.get(x["priority"], 3))
     return recs
 
-# ─────────────────────────────────────────────
-#  PDF REPORT
-# ─────────────────────────────────────────────
+# ── PDF REPORT ────────────────────────────────
 def build_pdf_report(username, department, total_score, risk_level, category_scores, recs, date_str):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4,
                             leftMargin=2*cm, rightMargin=2*cm,
                             topMargin=2*cm, bottomMargin=2*cm)
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('Title2', parent=styles['Title'],
-                                 fontSize=20, textColor=colors.HexColor('#1e3a5f'),
-                                 spaceAfter=4, fontName='Helvetica-Bold', alignment=TA_CENTER)
-    h2_style = ParagraphStyle('H2', parent=styles['Heading2'],
-                              fontSize=13, textColor=colors.HexColor('#1d4ed8'),
-                              spaceBefore=14, spaceAfter=4, fontName='Helvetica-Bold')
-    body_style = ParagraphStyle('Body2', parent=styles['Normal'],
-                                fontSize=9.5, leading=14, spaceAfter=4)
-    small_style = ParagraphStyle('Small', parent=styles['Normal'],
-                                 fontSize=8.5, textColor=colors.HexColor('#64748b'))
-    RISK_COLORS = {
-        "Excellent": colors.HexColor('#166534'),
-        "Good":      colors.HexColor('#1e40af'),
-        "Moderate":  colors.HexColor('#854d0e'),
-        "Poor":      colors.HexColor('#991b1b'),
-    }
-    risk_color = RISK_COLORS.get(risk_level, colors.black)
+    title_style = ParagraphStyle('T', parent=styles['Title'], fontSize=18,
+                                 textColor=colors.HexColor('#1e3a5f'),
+                                 fontName='Helvetica-Bold', alignment=TA_CENTER, spaceAfter=2)
+    sub_style   = ParagraphStyle('S', parent=styles['Normal'], fontSize=10,
+                                 textColor=colors.HexColor('#475569'), alignment=TA_CENTER, spaceAfter=4)
+    h2_style    = ParagraphStyle('H2', parent=styles['Heading2'], fontSize=12,
+                                 textColor=colors.HexColor('#1d4ed8'),
+                                 fontName='Helvetica-Bold', spaceBefore=14, spaceAfter=4)
+    small_style = ParagraphStyle('Sm', parent=styles['Normal'], fontSize=8,
+                                 textColor=colors.HexColor('#64748b'))
+    RISK_COLORS = {"Excellent": colors.HexColor('#166534'), "Good": colors.HexColor('#1e40af'),
+                   "Moderate": colors.HexColor('#854d0e'), "Poor": colors.HexColor('#991b1b')}
+    rc = RISK_COLORS.get(risk_level, colors.black)
     story = []
 
-    story.append(Paragraph("WorkSafe Pro", title_style))
-    story.append(Paragraph("Workstation Ergonomics & Safety Assessment Report",
-                           ParagraphStyle('sub', parent=styles['Normal'], fontSize=11,
-                                          textColor=colors.HexColor('#475569'), alignment=TA_CENTER)))
+    story.append(Paragraph("ICT in Health and Ergonomics", title_style))
+    story.append(Paragraph("Workstation Safety Scorer — Assessment Report", sub_style))
     story.append(Spacer(1, 0.3*cm))
     story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#1d4ed8')))
     story.append(Spacer(1, 0.4*cm))
 
-    meta = [
-        ["Assessor:", username, "Date:", date_str],
-        ["Department:", department, "Risk Level:", risk_level],
-    ]
-    meta_table = Table(meta, colWidths=[3*cm, 6*cm, 3*cm, 5*cm])
+    meta_table = Table(
+        [["Assessor:", username, "Date:", date_str],
+         ["Department:", department, "Risk Level:", risk_level]],
+        colWidths=[3*cm, 6*cm, 3*cm, 5*cm]
+    )
     meta_table.setStyle(TableStyle([
-        ('FONTNAME',  (0,0), (-1,-1), 'Helvetica'),
-        ('FONTNAME',  (0,0), (0,-1), 'Helvetica-Bold'),
-        ('FONTNAME',  (2,0), (2,-1), 'Helvetica-Bold'),
-        ('FONTSIZE',  (0,0), (-1,-1), 9),
-        ('TEXTCOLOR', (3,1), (3,1), risk_color),
-        ('FONTNAME',  (3,1), (3,1), 'Helvetica-Bold'),
+        ('FONTNAME', (0,0), (-1,-1), 'Helvetica'),
+        ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
+        ('FONTNAME', (2,0), (2,-1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('TEXTCOLOR', (3,1), (3,1), rc),
+        ('FONTNAME', (3,1), (3,1), 'Helvetica-Bold'),
         ('TOPPADDING', (0,0), (-1,-1), 4),
         ('BOTTOMPADDING', (0,0), (-1,-1), 4),
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f8fafc')),
@@ -512,19 +466,14 @@ def build_pdf_report(username, department, total_score, risk_level, category_sco
     story.append(Spacer(1, 0.5*cm))
 
     story.append(Paragraph("Overall Safety Score", h2_style))
-    score_data = [[f"{total_score:.1f} / 100", risk_level]]
-    score_table = Table(score_data, colWidths=[4*cm, 6*cm])
+    score_table = Table([[f"{total_score:.1f} / 100", risk_level]], colWidths=[4*cm, 6*cm])
     score_table.setStyle(TableStyle([
-        ('FONTNAME',  (0,0), (0,0), 'Helvetica-Bold'),
-        ('FONTSIZE',  (0,0), (0,0), 26),
-        ('TEXTCOLOR', (0,0), (0,0), risk_color),
-        ('FONTNAME',  (1,0), (1,0), 'Helvetica-Bold'),
-        ('FONTSIZE',  (1,0), (1,0), 14),
-        ('TEXTCOLOR', (1,0), (1,0), risk_color),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('TOPPADDING', (0,0), (-1,-1), 10),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 10),
+        ('FONTNAME', (0,0), (0,0), 'Helvetica-Bold'), ('FONTSIZE', (0,0), (0,0), 26),
+        ('TEXTCOLOR', (0,0), (0,0), rc),
+        ('FONTNAME', (1,0), (1,0), 'Helvetica-Bold'), ('FONTSIZE', (1,0), (1,0), 14),
+        ('TEXTCOLOR', (1,0), (1,0), rc),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'), ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 10), ('BOTTOMPADDING', (0,0), (-1,-1), 10),
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#f0f9ff')),
         ('GRID', (0,0), (-1,-1), 1, colors.HexColor('#bae6fd')),
     ]))
@@ -534,21 +483,17 @@ def build_pdf_report(username, department, total_score, risk_level, category_sco
     story.append(Paragraph("Category Breakdown", h2_style))
     cat_data = [["Category", "Score (%)", "Status"]]
     for cat, score in category_scores.items():
-        if score >= 80:   status = "Excellent"
-        elif score >= 65: status = "Good"
-        elif score >= 45: status = "Moderate"
-        else:             status = "Needs Attention"
+        status = "Excellent" if score>=80 else "Good" if score>=65 else "Moderate" if score>=45 else "Needs Attention"
         cat_data.append([cat, f"{score:.1f}%", status])
     cat_table = Table(cat_data, colWidths=[8*cm, 3.5*cm, 5.5*cm])
     cat_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1d4ed8')),
-        ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
-        ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE',   (0,0), (-1,-1), 9),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
         ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#f8fafc'), colors.white]),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
-        ('TOPPADDING', (0,0), (-1,-1), 5),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('TOPPADDING', (0,0), (-1,-1), 5), ('BOTTOMPADDING', (0,0), (-1,-1), 5),
         ('LEFTPADDING', (0,0), (-1,-1), 8),
     ]))
     story.append(cat_table)
@@ -557,20 +502,19 @@ def build_pdf_report(username, department, total_score, risk_level, category_sco
     if recs:
         story.append(Paragraph("Prioritised Recommendations", h2_style))
         rec_data = [["#", "Priority", "Category", "Recommended Action"]]
-        P_COLORS = {"High": colors.HexColor('#fee2e2'), "Medium": colors.HexColor('#fef3c7'), "Low": colors.HexColor('#d1fae5')}
+        P_COLORS = {"High": colors.HexColor('#fee2e2'), "Medium": colors.HexColor('#fef3c7'),
+                    "Low": colors.HexColor('#d1fae5')}
         for i, r in enumerate(recs[:15], 1):
-            rec_data.append([str(i), r["priority"], r["category"].split(" ", 1)[1][:20], r["advice"]])
+            rec_data.append([str(i), r["priority"], r["category"].split(" ",1)[1][:20], r["advice"]])
         rec_table = Table(rec_data, colWidths=[0.7*cm, 2*cm, 4.3*cm, 10*cm])
         style_cmds = [
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1d4ed8')),
-            ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
-            ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
-            ('FONTSIZE',   (0,0), (-1,-1), 8),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 8),
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#e2e8f0')),
-            ('TOPPADDING', (0,0), (-1,-1), 4),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-            ('LEFTPADDING', (0,0), (-1,-1), 5),
-            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('TOPPADDING', (0,0), (-1,-1), 4), ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('LEFTPADDING', (0,0), (-1,-1), 5), ('VALIGN', (0,0), (-1,-1), 'TOP'),
         ]
         for i, r in enumerate(recs[:15], 1):
             style_cmds.append(('BACKGROUND', (1,i), (1,i), P_COLORS.get(r["priority"], colors.white)))
@@ -581,31 +525,27 @@ def build_pdf_report(username, department, total_score, risk_level, category_sco
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#e2e8f0')))
     story.append(Spacer(1, 0.2*cm))
     story.append(Paragraph(
-        "Generated by WorkSafe Pro | Based on ISO 9241 Ergonomics Standards & OSHA Guidelines | Not a substitute for professional ergonomic assessment",
+        "Generated by ICT in Health and Ergonomics: Workstation Safety Scorer | ISO 9241 & OSHA Guidelines | Not a substitute for professional ergonomic assessment",
         small_style))
     doc.build(story)
     buffer.seek(0)
     return buffer
 
-# ─────────────────────────────────────────────
-#  SESSION STATE
-# ─────────────────────────────────────────────
-if "user" not in st.session_state:       st.session_state.user = None
-if "admin" not in st.session_state:      st.session_state.admin = None
-if "responses" not in st.session_state:  st.session_state.responses = {}
-if "result" not in st.session_state:     st.session_state.result = None
+# ── SESSION STATE ─────────────────────────────
+if "user"      not in st.session_state: st.session_state.user      = None
+if "admin"     not in st.session_state: st.session_state.admin     = None
+if "responses" not in st.session_state: st.session_state.responses = {}
+if "result"    not in st.session_state: st.session_state.result    = None
 
-# ─────────────────────────────────────────────
-#  SIDEBAR
-# ─────────────────────────────────────────────
+# ── SIDEBAR ───────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style='text-align:center; padding: 1rem 0 0.5rem;'>
-        <div style='font-family:Syne,sans-serif; font-size:1.4rem; font-weight:800; color:#e0f2fe;'>
-            🏥 WorkSafe Pro
+    <div style='text-align:center;padding:1rem 0 0.5rem;'>
+        <div style='font-family:Syne,sans-serif;font-size:1.1rem;font-weight:800;color:#e0f2fe;line-height:1.3;'>
+            🖥️ ICT in Health<br>and Ergonomics
         </div>
-        <div style='font-size:0.75rem; color:#7dd3fc; margin-top:2px;'>
-            Ergonomics & Safety Scorer
+        <div style='font-size:0.72rem;color:#7dd3fc;margin-top:4px;'>
+            Workstation Safety Scorer
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -633,24 +573,21 @@ with st.sidebar:
         nav = st.radio("Navigate", ["🏠 Home", "🔑 Login", "📝 Register", "🛡️ Admin"])
 
     st.markdown("""
-    <div style='position:absolute;bottom:1rem;left:0;right:0;text-align:center;font-size:0.72rem;color:#475569;'>
-        v2.0 · ICT Health & Ergonomics<br>ISO 9241 · OSHA Standards
+    <div style='position:absolute;bottom:1rem;left:0;right:0;text-align:center;font-size:0.7rem;color:#475569;'>
+        ICT in Health & Ergonomics<br>ISO 9241 · OSHA Standards
     </div>
     """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-#  PAGES — PUBLIC
-# ─────────────────────────────────────────────
+# ── PUBLIC PAGES ──────────────────────────────
 if not st.session_state.user and not st.session_state.admin and nav == "🏠 Home":
     st.markdown("""
     <div class="hero-banner">
-        <div class="hero-title">WorkSafe Pro 2.0</div>
-        <div class="hero-sub">Advanced ICT Workstation Ergonomics & Safety Assessment Platform</div>
+        <div class="hero-title">ICT in Health and Ergonomics</div>
+        <div class="hero-sub">Workstation Safety Scorer — Advanced Assessment Platform</div>
     </div>
     """, unsafe_allow_html=True)
 
-    col1, col2, col3, col4 = st.columns(4)
-    for col, (val, lbl, icon) in zip([col1,col2,col3,col4], [
+    for col, (val, lbl, icon) in zip(st.columns(4), [
         ("35","Assessment Questions","📋"),
         ("7","Evaluation Categories","🗂️"),
         ("ISO 9241","Ergonomics Standard","✅"),
@@ -673,7 +610,7 @@ if not st.session_state.user and not st.session_state.admin and nav == "🏠 Hom
             <ul style="color:#374151;font-size:0.88rem;line-height:2;">
                 <li>Weighted 5-point Likert scale scoring</li>
                 <li>Real-time radar + bar chart visualisation</li>
-                <li>AI-driven priority recommendations</li>
+                <li>Priority-ranked recommendations</li>
                 <li>Trend tracking across sessions</li>
                 <li>Downloadable professional PDF report</li>
                 <li>Admin analytics dashboard</li>
@@ -682,7 +619,7 @@ if not st.session_state.user and not st.session_state.admin and nav == "🏠 Hom
         </div>""", unsafe_allow_html=True)
 
 elif not st.session_state.user and not st.session_state.admin and nav == "🔑 Login":
-    st.markdown('<div class="hero-banner"><div class="hero-title">Sign In</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-banner"><div class="hero-title">Sign In</div><div class="hero-sub">ICT in Health and Ergonomics: Workstation Safety Scorer</div></div>', unsafe_allow_html=True)
     col, _ = st.columns([1.2, 1])
     with col:
         with st.form("login_form"):
@@ -699,7 +636,7 @@ elif not st.session_state.user and not st.session_state.admin and nav == "🔑 L
                 st.error("Invalid credentials.")
 
 elif not st.session_state.user and not st.session_state.admin and nav == "📝 Register":
-    st.markdown('<div class="hero-banner"><div class="hero-title">Create Account</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-banner"><div class="hero-title">Create Account</div><div class="hero-sub">ICT in Health and Ergonomics: Workstation Safety Scorer</div></div>', unsafe_allow_html=True)
     col, _ = st.columns([1.2, 1])
     with col:
         with st.form("reg_form"):
@@ -710,14 +647,14 @@ elif not st.session_state.user and not st.session_state.admin and nav == "📝 R
             pw2  = st.text_input("Confirm Password", type="password")
             sub  = st.form_submit_button("Create Account →")
         if sub:
-            if pw1 != pw2:       st.error("Passwords do not match.")
-            elif len(pw1) < 6:   st.error("Password must be at least 6 characters.")
-            elif not fn or not un: st.error("All fields are required.")
+            if pw1 != pw2:          st.error("Passwords do not match.")
+            elif len(pw1) < 6:      st.error("Password must be at least 6 characters.")
+            elif not fn or not un:  st.error("All fields are required.")
             elif register_user(un, pw1, fn, dept): st.success("Account created! Please log in.")
             else: st.error("Username already taken.")
 
 elif not st.session_state.user and not st.session_state.admin and nav == "🛡️ Admin":
-    st.markdown('<div class="hero-banner"><div class="hero-title">Admin Login</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-banner"><div class="hero-title">Admin Login</div><div class="hero-sub">ICT in Health and Ergonomics: Workstation Safety Scorer</div></div>', unsafe_allow_html=True)
     col, _ = st.columns([1.2, 1])
     with col:
         with st.form("admin_form"):
@@ -734,9 +671,7 @@ elif not st.session_state.user and not st.session_state.admin and nav == "🛡�
                 st.error("Invalid admin credentials.")
         st.caption("Default: admin / admin123")
 
-# ─────────────────────────────────────────────
-#  PAGES — AUTHENTICATED USER
-# ─────────────────────────────────────────────
+# ── AUTHENTICATED USER PAGES ──────────────────
 elif st.session_state.user:
     user = st.session_state.user
 
@@ -744,7 +679,7 @@ elif st.session_state.user:
         st.markdown(f"""
         <div class="hero-banner">
             <div class="hero-title">Welcome, {user['full_name'].split()[0]} 👋</div>
-            <div class="hero-sub">Your Ergonomics & Safety Dashboard · {user['department']}</div>
+            <div class="hero-sub">ICT in Health and Ergonomics: Workstation Safety Scorer · {user['department']}</div>
         </div>""", unsafe_allow_html=True)
 
         history = get_user_history(user["id"])
@@ -755,16 +690,11 @@ elif st.session_state.user:
             rl, _, icon = get_risk_level(last_score)
             c2.markdown(f"""<div class="metric-tile"><div class="val">{last_score:.0f}%</div><div class="lbl">Latest Score</div></div>""", unsafe_allow_html=True)
             c3.markdown(f"""<div class="metric-tile"><div class="val">{icon} {rl}</div><div class="lbl">Risk Level</div></div>""", unsafe_allow_html=True)
-
             df = pd.DataFrame([{"Date": h["created_at"][:10], "Score": h["total_score"]} for h in history])
             fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=df["Date"], y=df["Score"],
-                mode="lines+markers",
-                line=dict(color="#1d4ed8", width=3),
-                marker=dict(size=8, color="#3b82f6"),
-                fill="tozeroy", fillcolor="rgba(59,130,246,0.08)"
-            ))
+            fig.add_trace(go.Scatter(x=df["Date"], y=df["Score"], mode="lines+markers",
+                                     line=dict(color="#1d4ed8", width=3), marker=dict(size=8),
+                                     fill="tozeroy", fillcolor="rgba(59,130,246,0.08)"))
             fig.add_hline(y=80, line_dash="dash", line_color="#10b981", annotation_text="Excellent (80+)")
             fig.add_hline(y=65, line_dash="dash", line_color="#f59e0b", annotation_text="Good (65+)")
             fig.update_layout(title="Score History", paper_bgcolor="white", plot_bgcolor="#f8fafc",
@@ -780,7 +710,7 @@ elif st.session_state.user:
         st.markdown("""
         <div class="hero-banner">
             <div class="hero-title">📋 New Assessment</div>
-            <div class="hero-sub">Rate each criterion: 1 (Never) → 5 (Always / Fully)</div>
+            <div class="hero-sub">ICT in Health and Ergonomics: Workstation Safety Scorer · Rate each criterion 1 (Never) → 5 (Always)</div>
         </div>""", unsafe_allow_html=True)
 
         with st.form("assessment_form"):
@@ -819,7 +749,6 @@ elif st.session_state.user:
             icon = "🟢" if rl=="Excellent" else "🔵" if rl=="Good" else "🟡" if rl=="Moderate" else "🔴"
             st.markdown("---")
             st.markdown("## 📊 Results")
-
             c1, c2 = st.columns([1, 2])
             with c1:
                 st.markdown(f"""
@@ -837,12 +766,10 @@ elif st.session_state.user:
                     fill="toself", fillcolor="rgba(29,78,216,0.15)",
                     line=dict(color="#1d4ed8", width=2), marker=dict(size=6),
                 ))
-                fig.update_layout(
-                    polar=dict(radialaxis=dict(range=[0,100])),
-                    paper_bgcolor="white", height=320,
-                    margin=dict(l=30,r=30,t=30,b=30),
-                    font=dict(family="DM Sans"), title="Category Radar"
-                )
+                fig.update_layout(polar=dict(radialaxis=dict(range=[0,100])),
+                                  paper_bgcolor="white", height=320,
+                                  margin=dict(l=30,r=30,t=30,b=30),
+                                  font=dict(family="DM Sans"), title="Category Radar")
                 st.plotly_chart(fig, use_container_width=True)
 
             fig2 = go.Figure(go.Bar(
@@ -868,7 +795,7 @@ elif st.session_state.user:
                     </div>""", unsafe_allow_html=True)
 
     elif nav == "📊 My History":
-        st.markdown('<div class="hero-banner"><div class="hero-title">📊 History</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="hero-banner"><div class="hero-title">📊 My History</div><div class="hero-sub">ICT in Health and Ergonomics: Workstation Safety Scorer</div></div>', unsafe_allow_html=True)
         history = get_user_history(user["id"])
         if not history:
             st.info("No assessments recorded yet.")
@@ -881,13 +808,13 @@ elif st.session_state.user:
                     marker_color=["#10b981" if s>=80 else "#3b82f6" if s>=65 else "#f59e0b" if s>=45 else "#ef4444" for s in df["Score (%)"]],
                     text=df["Score (%)"].apply(lambda x: f"{x:.1f}%"), textposition="outside"
                 ))
-                fig.update_layout(title="All Scores", yaxis=dict(range=[0,115]),
+                fig.update_layout(title="All Assessment Scores", yaxis=dict(range=[0,115]),
                                   paper_bgcolor="white", plot_bgcolor="#f8fafc",
                                   height=320, font=dict(family="DM Sans"), xaxis_tickangle=-30)
                 st.plotly_chart(fig, use_container_width=True)
 
     elif nav == "⬇️ Download Report":
-        st.markdown('<div class="hero-banner"><div class="hero-title">⬇️ Download Report</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="hero-banner"><div class="hero-title">⬇️ Download Report</div><div class="hero-sub">ICT in Health and Ergonomics: Workstation Safety Scorer</div></div>', unsafe_allow_html=True)
         history = get_user_history(user["id"])
         if not history:
             st.info("No assessments found. Complete an assessment first.")
@@ -904,19 +831,17 @@ elif st.session_state.user:
                                            chosen["total_score"], chosen["risk_level"],
                                            cat_scores, recs, chosen["created_at"][:10])
                 st.download_button("⬇️ Download PDF", data=buf,
-                                   file_name=f"worksafe_report_{chosen['created_at'][:10]}.pdf",
+                                   file_name=f"ICT_Ergonomics_Report_{chosen['created_at'][:10]}.pdf",
                                    mime="application/pdf")
 
-# ─────────────────────────────────────────────
-#  PAGES — ADMIN
-# ─────────────────────────────────────────────
+# ── ADMIN PAGES ───────────────────────────────
 elif st.session_state.admin:
     if nav == "📊 Overview":
-        st.markdown('<div class="hero-banner"><div class="hero-title">🛡️ Admin Overview</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="hero-banner"><div class="hero-title">🛡️ Admin Overview</div><div class="hero-sub">ICT in Health and Ergonomics: Workstation Safety Scorer</div></div>', unsafe_allow_html=True)
         all_a = get_all_assessments()
         all_u = get_all_users()
-        c1, c2, c3 = st.columns(3)
         avg = sum(a["total_score"] for a in all_a) / len(all_a) if all_a else 0
+        c1, c2, c3 = st.columns(3)
         c1.markdown(f"""<div class="metric-tile"><div class="val">{len(all_u)}</div><div class="lbl">Registered Users</div></div>""", unsafe_allow_html=True)
         c2.markdown(f"""<div class="metric-tile"><div class="val">{len(all_a)}</div><div class="lbl">Total Assessments</div></div>""", unsafe_allow_html=True)
         c3.markdown(f"""<div class="metric-tile"><div class="val">{avg:.1f}%</div><div class="lbl">Avg Score</div></div>""", unsafe_allow_html=True)
@@ -929,13 +854,13 @@ elif st.session_state.admin:
                 fig = px.pie(rc, values="Count", names="Risk Level",
                              color="Risk Level",
                              color_discrete_map={"Excellent":"#10b981","Good":"#3b82f6","Moderate":"#f59e0b","Poor":"#ef4444"},
-                             title="Risk Distribution")
+                             title="Risk Level Distribution")
                 fig.update_layout(paper_bgcolor="white", font=dict(family="DM Sans"), height=320)
                 st.plotly_chart(fig, use_container_width=True)
             with col2:
                 da = df.groupby("Dept")["Score"].mean().reset_index()
                 da.columns = ["Department","Average Score"]
-                fig2 = px.bar(da, x="Department", y="Average Score", title="Avg Score by Dept",
+                fig2 = px.bar(da, x="Department", y="Average Score", title="Avg Score by Department",
                               color="Average Score",
                               color_continuous_scale=["#ef4444","#f59e0b","#3b82f6","#10b981"])
                 fig2.update_layout(paper_bgcolor="white", plot_bgcolor="#f8fafc",
@@ -943,20 +868,23 @@ elif st.session_state.admin:
                 st.plotly_chart(fig2, use_container_width=True)
 
     elif nav == "👥 Users":
-        st.markdown('<div class="hero-banner"><div class="hero-title">👥 Users</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="hero-banner"><div class="hero-title">👥 Users</div><div class="hero-sub">ICT in Health and Ergonomics: Workstation Safety Scorer</div></div>', unsafe_allow_html=True)
         users = get_all_users()
         df = pd.DataFrame(users)[["username","full_name","department","created_at"]]
         df.columns = ["Username","Full Name","Department","Registered"]
         st.dataframe(df, use_container_width=True, hide_index=True)
 
     elif nav == "📋 All Assessments":
-        st.markdown('<div class="hero-banner"><div class="hero-title">📋 All Assessments</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="hero-banner"><div class="hero-title">📋 All Assessments</div><div class="hero-sub">ICT in Health and Ergonomics: Workstation Safety Scorer</div></div>', unsafe_allow_html=True)
         all_a = get_all_assessments()
         if all_a:
             df = pd.DataFrame([{"User":a["username"],"Dept":a["department"],"Score":f"{a['total_score']:.1f}%","Risk":a["risk_level"],"Date":a["created_at"][:16]} for a in all_a])
             st.dataframe(df, use_container_width=True, hide_index=True)
-            st.download_button("⬇️ Export CSV", df.to_csv(index=False), "all_assessments.csv", "text/csv")
+            st.download_button("⬇️ Export CSV", df.to_csv(index=False),
+                               "ICT_Ergonomics_Assessments.csv", "text/csv")
+        else:
+            st.info("No assessments yet.")
 
 else:
-    st.markdown('<div class="hero-banner"><div class="hero-title">Access Required</div><div class="hero-sub">Please log in or register to continue.</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-banner"><div class="hero-title">ICT in Health and Ergonomics</div><div class="hero-sub">Workstation Safety Scorer — Please log in or register to continue.</div></div>', unsafe_allow_html=True)
     st.info("Use the sidebar to **Login** or **Register**.")
