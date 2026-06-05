@@ -1403,30 +1403,29 @@ elif st.session_state.user:
                     name="Score",
                     hovertemplate="<b>%{theta}</b><br>%{r:.1f}%<extra></extra>",
                 ))
-fig.update_layout
-    height=380,
-    showlegend=False,
-    margin=dict(l=40, r=40, t=50, b=40),
-    title=dict(
-        text="Category Radar · Neon Filament View",
-        font=dict(size=13, color="#FFFFFF"),
-        x=0.5,
-        xanchor="center"
-    ),
-    polar=dict
-        bgcolor="rgba(0,0,0,0)",
-        radialaxis=dict(
-            range=[0, 100],
-            tickvals=[20, 40, 60, 80, 100],
-            tickfont=dict(size=10, color="#A0AEC0"),
-            gridcolor="rgba(0,240,255,0.1)",
-            linecolor="rgba(0,240,255,0.15)",
-        ),
-        angularaxis=dict(
-            tickfont=dict(size=10, color="#FFFFFF"),
-            linecolor="rgba(0,240,255,0.15)",
-            gridcolor="rgba(0,240,255,0.08)",
-        )
+                fig.update_layout(
+                    polar=dict(
+                        radialaxis=dict(
+                            range=[0, 100],
+                            tickfont=dict(size=10, color="#A0AEC0"),
+                            gridcolor="rgba(0,240,255,0.1)",
+                            linecolor="rgba(0,240,255,0.15)",
+                            tickvals=[20,40,60,80,100],
+                        ),
+                        angularaxis=dict(
+                            tickfont=dict(size=10, color="#FFFFFF"),
+                            linecolor="rgba(0,240,255,0.15)",
+                            gridcolor="rgba(0,240,255,0.08)",
+                        ),
+                        bgcolor="rgba(0,0,0,0)",
+                    ),
+                    title=dict(text="Category Radar · Neon Filament View",
+                               font=dict(size=13, color="#FFFFFF"), x=0.5, xanchor="center"),
+                    showlegend=False,
+                    height=380,
+                    margin=dict(l=40, r=40, t=50, b=40),
+                    **CHART_LAYOUT
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
             # Bar chart
