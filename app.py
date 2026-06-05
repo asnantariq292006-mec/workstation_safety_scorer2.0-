@@ -1066,7 +1066,7 @@ with st.sidebar:
             st.session_state.admin = None
             st.rerun()
     else:
-        nav = st.radio("", ["🏠  Home", "🔑  Login", "📝  Register", "🛡️  Admin"])
+        nav = st.radio("Navigation", ["🏠  Home", "🔑  Login", "📝  Register", "🛡️  Admin"], label_visibility="collapsed")
 
     st.markdown("""
     <div style='position:absolute;bottom:1rem;left:0;right:0;text-align:center;'>
