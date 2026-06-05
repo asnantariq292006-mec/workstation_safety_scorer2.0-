@@ -1312,7 +1312,7 @@ elif st.session_state.user:
             st.info("No assessments yet. Go to **New Assessment** to get started!")
 
     # ── NEW ASSESSMENT ──
-    elif "Assessment" in nav and "New" in nav or "New" in nav:
+    elif "Assessment" in nav or "New" in nav:
         render_banner(
             '📋 New <span class="glow-text">Assessment</span>',
             "ICT in Health and Ergonomics · Rate each criterion: 1 (Never) → 5 (Always)"
@@ -1568,9 +1568,7 @@ elif st.session_state.user:
                     mime="application/pdf"
                 )
 
-# ══════════════════════════════════════════════
-#  ADMIN
-# ══════════════════════════════════════════════
+# ── Admin Panel ──
 elif st.session_state.admin:
     if "Overview" in nav:
         render_banner('🛡️  Admin <span class="glow-text">Overview</span>',
