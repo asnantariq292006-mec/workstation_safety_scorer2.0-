@@ -1426,9 +1426,7 @@ fig.update_layout(
             tickfont=dict(size=10, color="#FFFFFF"),
             linecolor="rgba(0,240,255,0.15)",
             gridcolor="rgba(0,240,255,0.08)",
-        ),
-    )
-)
+        )
                 st.plotly_chart(fig, use_container_width=True)
 
             # Bar chart
