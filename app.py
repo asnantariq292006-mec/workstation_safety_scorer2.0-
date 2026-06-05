@@ -1166,7 +1166,7 @@ elif not st.session_state.user and not st.session_state.admin and "Login" in nav
             else:
                 st.error("Invalid credentials.")
         st.markdown('</div>', unsafe_allow_html=True)
-
+nav = st.radio("Navigation", ["🏠 Home", "🔑 Login", "📝 Register", "🛡️ Admin"], label_visibility="collapsed")
 elif not st.session_state.user and not st.session_state.admin and "Register" in nav:
     render_banner(
         'Create <span class="glow-text">Account</span>',
