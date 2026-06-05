@@ -1413,7 +1413,7 @@ fig.update_layout(
         x=0.5,
         xanchor="center"
     ),
-    polar=dict(
+    polar=dict
         bgcolor="rgba(0,0,0,0)",
         radialaxis=dict(
             range=[0, 100],
