@@ -1403,7 +1403,7 @@ elif st.session_state.user:
                     name="Score",
                     hovertemplate="<b>%{theta}</b><br>%{r:.1f}%<extra></extra>",
                 ))
-fig.update_layout
+fig.update_layout(
     height=380,
     showlegend=False,
     margin=dict(l=40, r=40, t=50, b=40),
