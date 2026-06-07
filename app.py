@@ -1132,7 +1132,8 @@ def category_bar(cat_scores):
         yaxis=dict(autorange="reversed"),
         bargap=0.35,
     )
-    return figdef dept_bar(rows):
+    return fig
+    def dept_bar(rows):
     df = pd.DataFrame(rows, columns=["id", "username", "name", "dept", "score", "risk", "created"])
     if df.empty: return None
     avg = df.groupby("dept")["score"].mean().reset_index()
