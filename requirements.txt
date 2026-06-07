@@ -1,10 +1,9 @@
 # ======================================================
-#  Workstation Safety Scorer v3.0 - Requirements
+#  Workstation Safety Scorer v4.0 — Requirements
 #  ICT in Health & Ergonomics | UET Taxila Engineering
 # ======================================================
- 
+
 streamlit>=1.35.0
 pandas>=2.0.0
 plotly>=5.20.0
 fpdf2>=2.7.9
- 
