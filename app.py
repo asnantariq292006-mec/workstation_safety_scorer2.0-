@@ -1133,8 +1133,8 @@ def category_bar(cat_scores):
         bargap=0.35,
     )
     return fig
-    
-    def dept_bar(rows):
+
+def dept_bar(rows):
     df = pd.DataFrame(rows, columns=["id", "username", "name", "dept", "score", "risk", "created"])
     if df.empty: return None
     avg = df.groupby("dept")["score"].mean().reset_index()
@@ -2040,4 +2040,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
