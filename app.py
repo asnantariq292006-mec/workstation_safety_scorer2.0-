@@ -1133,6 +1133,7 @@ def category_bar(cat_scores):
         bargap=0.35,
     )
     return fig
+    
     def dept_bar(rows):
     df = pd.DataFrame(rows, columns=["id", "username", "name", "dept", "score", "risk", "created"])
     if df.empty: return None
